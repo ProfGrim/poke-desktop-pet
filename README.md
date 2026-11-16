@@ -6,7 +6,7 @@ between monitors if you have more than one. Windows only. It uses hardly any CPU
 ![Pikachu standing on the bottom edge of the screen](screenshots/pet.png)
 
 Fan project, not affiliated with Nintendo, Game Freak or The Pokémon Company. The models belong to them.
-If they ask me to take this down, I will.
+
 
 ## Where the models come from
 
