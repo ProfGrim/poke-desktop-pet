@@ -1,0 +1,9 @@
+{
+  "name": "pokemon-desktop-pet",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tauri dev", "build": "tauri build", "test": "node tests/displays.test.mjs" },
+  "devDependencies": { "@tauri-apps/cli": "^2" },
+  "dependencies": { "three": "^0.170.0" }
+}

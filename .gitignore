@@ -1,0 +1,8 @@
+.work/
+dist/
+node_modules/
+pack/
+src-tauri/gen/
+src-tauri/target/
+
+packs/
