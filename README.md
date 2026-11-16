@@ -6,6 +6,8 @@ between monitors if you have more than one. Windows only. It uses hardly any CPU
 Fan project, not affiliated with Nintendo, Game Freak or The Pokémon Company. The models belong to them.
 If they ask me to take this down, I will.
 
+![Pikachu standing on the bottom edge of the screen](screenshots/pet.png)
+
 ## Install
 
 1. Grab `PokemonDesktopPet_1.0.0_x64-setup.exe` from the [releases page](../../releases/latest) and run it.
@@ -17,6 +19,8 @@ If they ask me to take this down, I will.
 3. Open the app and hit **Load model pack…** in the picker. Select your zips. The big ones take a minute.
 4. Click a Pokémon and it'll start walking around.
 
+![The picker, with an arrow pointing at the Load model pack button](screenshots/picker.png)
+
 ## Using it
 
 - Right-click the tray icon for the menu (change Pokémon, shiny, multi-monitor walking, quit). Left-clicking
@@ -24,6 +28,8 @@ If they ask me to take this down, I will.
 - The search box takes a name or a dex number.
 - If you've loaded the forms pack, Pokémon with other forms get a **Form** menu in the picker.
 - Models without a shiny version just show their normal colours.
+
+![The tray icon menu](screenshots/tray-menu.png)
 
 Packs get copied to `%APPDATA%\dev.local.fuecocopet\models`. To get rid of everything, uninstall the app and
 delete that folder.
