@@ -3,7 +3,7 @@
 A little Pokémon that walks around the bottom of your screen. It naps, eats, follows your mouse, and wanders
 between monitors if you have more than one. Windows only. It uses hardly any CPU.
 
-![Pikachu standing on the bottom edge of the screen](screenshots/pet.png)
+![Pikachu standing on the desktop](screenshots/pet-desktop.png)
 
 Fan project, not affiliated with Nintendo, Game Freak or The Pokémon Company. The models belong to them.
 
@@ -68,6 +68,9 @@ starting the app again, brings the picker back.
 
 - **Change Pokémon…** opens the picker. The search box takes a name or a dex number (`char`, `25`, `#150`).
 - **Shiny** switches to the shiny colours. A model without a shiny version just stays in its normal colours.
+
+![A shiny Scizor on the desktop](screenshots/pet-shiny-scizor.png)
+
 - **Move to monitor** (more than one monitor only). Sends the pet to the monitor you pick.
 - **Walk between monitors** (more than one monitor only). On by default. The pet now and then walks off the
   edge of its screen and onto the next one. Turn it off and it stays where it is.
