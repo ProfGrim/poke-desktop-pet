@@ -33,7 +33,7 @@ If something looks off, open an issue with the Pokémon, form and whether it's s
 1. Grab `PokemonDesktopPet_1.0.1_x64-setup.exe` from the [releases page](../../releases/latest) and run it.
    Windows will probably warn you about an unknown publisher (I haven't paid for a code-signing certificate).
    Click "More info", then "Run anyway".
-2. Download some model packs from the same page. They're big (roughly 200 MB to 1.5 GB), so you only need the
+2. Download some model packs from the [1.0.0 release](../../releases/tag/v1.0.0) (the packs haven't changed since). They're big (roughly 200 MB to 1.5 GB), so you only need the
    ones you want. No need to unzip them.
 3. Open the app and hit **Load model pack…** in the picker. Select your zips. The big ones take a minute.
 4. Click a Pokémon and it'll start walking around.
