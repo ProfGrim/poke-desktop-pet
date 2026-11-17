@@ -1,6 +1,6 @@
 // node tests/displays.test.mjs   (no dependencies)
 import assert from 'node:assert/strict';
-import { monitorAt, floorOf, canWalkBetween, walkChain, nearestFree } from '../src/displays.js';
+import { monitorAt, floorOf, canWalkBetween, walkChain, nearestFree, reachableX } from '../src/displays.js';
 
 const mon = (id, left, top, w, h, extra = {}) => ({
   id, left, top, right: left + w, bottom: top + h,

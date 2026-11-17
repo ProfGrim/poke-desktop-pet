@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { fetchModelBytes, parseGlb, prepare, FLOOR } from './model.js';
-import { monitorAt, floorOf, walkChain, nearestFree } from './displays.js';
+import { monitorAt, floorOf, walkChain, nearestFree, reachableX } from './displays.js';
 
 // ---------------------------------------------------------------- environment
 // Inside Tauri the window itself walks around the desktop. In a plain browser
@@ -319,6 +319,7 @@ const easeOut = (k) => 1 - (1 - k) * (1 - k);
 
 function step(dt) {
   pet.sinceNap += dt;
+  const x0 = pos.x;
   switch (pet.state) {
     case 'idle':
       pet.timer -= dt;
@@ -328,6 +329,9 @@ function step(dt) {
       if (seq && seq.t > 0) { seq.t -= dt; if (seq.t <= 0) nextStep(); }
       break;
     case 'walk': {
+      // A monitor can fill up with a game while he is on his way to it, which shrinks where he may stand.
+      // Re-aim at the nearest spot he can reach, so he stops at the edge instead of pushing against it.
+      pet.target = reachableX(chain(), pet.target, size.w);
       pos.x += pet.dir * 70 * dpr * dt;
       const arrived = pet.dir > 0 ? pos.x >= pet.target : pos.x <= pet.target;
       if (arrived) enter('idle');
@@ -335,7 +339,7 @@ function step(dt) {
     }
     case 'chase': {
       if (!cursorOnFloor()) return enter('idle');
-      const gap = cursor.x - size.w / 2 - pos.x;
+      const gap = reachableX(chain(), cursor.x - size.w / 2, size.w) - pos.x;   // never aim past the edge of his floor
       pet.timer -= dt;
       if (Math.abs(gap) < 90 * dpr || pet.timer <= 0) return enter(Math.random() < 0.35 ? 'pounce' : 'notice');
       pet.dir = gap > 0 ? 1 : -1;
@@ -384,6 +388,12 @@ function step(dt) {
     pos.x = clamp(pos.x, ch.left, ch.right - size.w);
     if (pet.state !== 'fall') pos.y = groundY();
   }
+
+  // Last line of defence: walking or trotting but going nowhere (pinned against an edge) for a second means stop.
+  if (pet.state === 'walk' || pet.state === 'chase') {
+    pet.stuck = Math.abs(pos.x - x0) < 0.05 * dpr ? (pet.stuck ?? 0) + dt : 0;
+    if (pet.stuck > 1) { pet.stuck = 0; enter('idle'); }
+  } else pet.stuck = 0;
 
   // smooth turn + little hop; the warp scales him about his feet
   const d = pet.yawGoal - pet.yaw;
@@ -604,7 +614,7 @@ function lowestRow() {
 
 // handy for poking at it from the console / a test harness
 window.__pet = {
-  enter, pet, pos, play, actions, applySettings, lowestRow, applyDisplays, beginWarp,
+  enter, pet, pos, play, actions, applySettings, lowestRow, applyDisplays, beginWarp, step,
   get species() { return species; }, get shiny() { return shiny; }, get cursor() { return cursor; },
   get ignoring() { return ignoring; }, get seq() { return seq; }, get hidden() { return hidden; },
   get overlayMode() { return overlayMode; }, get size() { return size; },

@@ -56,3 +56,6 @@ export function nearestFree(monitors, from, isFree) {
   }
   return best;
 }
+
+/** The nearest x he can actually stand at, for a window of width w on a walkable chain (see walkChain). */
+export const reachableX = (chain, x, w) => Math.min(Math.max(x, chain.left), Math.max(chain.left, chain.right - w));
