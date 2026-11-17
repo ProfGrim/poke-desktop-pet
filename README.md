@@ -75,6 +75,8 @@ starting the app again, brings the picker back.
 - **Walk between monitors** (more than one monitor only). On by default. The pet now and then walks off the
   edge of its screen and onto the next one. Turn it off and it stays where it is.
 - **Keep walking over fullscreen apps (not clickable)**. Off by default. See the next section.
+- **Start with Windows**. Off by default. Adds or removes the app's entry in your Windows startup apps, so the
+  pet appears when you sign in. It starts straight into the tray and only opens the picker the very first time.
 - **Quit** closes it.
 
 Forms aren't in the tray menu. Pokémon that have other forms loaded get a **Form** menu in the picker, next to the

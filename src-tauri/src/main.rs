@@ -266,7 +266,34 @@ impl Default for Settings {
     }
 }
 
+// ------------------------------------------------------------------ start with Windows
+
+const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+const RUN_NAME: &str = "PokemonDesktopPet";
+
+fn reg(args: &[&str]) -> Option<std::process::Output> {
+    use std::os::windows::process::CommandExt;
+    std::process::Command::new("reg").args(args).creation_flags(0x0800_0000).output().ok()
+}
+
+/// The registry is the truth: the user can also switch this off in Windows' Startup apps.
+fn autostart_enabled() -> bool {
+    reg(&["query", RUN_KEY, "/v", RUN_NAME]).map(|o| o.status.success()).unwrap_or(false)
+}
+
+fn set_autostart(on: bool) {
+    if on {
+        if let Ok(exe) = std::env::current_exe() {
+            let value = format!("\"{}\"", exe.display());
+            reg(&["add", RUN_KEY, "/v", RUN_NAME, "/t", "REG_SZ", "/d", &value, "/f"]);
+        }
+    } else {
+        reg(&["delete", RUN_KEY, "/v", RUN_NAME, "/f"]);
+    }
+}
+
 struct TrayItems {
+    startup: CheckMenuItem<Wry>,
     shiny: CheckMenuItem<Wry>,
     roam: CheckMenuItem<Wry>,
     overlay: CheckMenuItem<Wry>,
@@ -554,6 +581,7 @@ fn build_menu(app: &AppHandle, s: &Settings, monitors: &[Mon]) -> tauri::Result<
         s.overlay,
         None::<&str>,
     )?;
+    let startup = CheckMenuItem::with_id(app, "startup", "Start with Windows", true, autostart_enabled(), None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     let menu = Menu::new(app)?;
@@ -575,9 +603,10 @@ fn build_menu(app: &AppHandle, s: &Settings, monitors: &[Mon]) -> tauri::Result<
         menu.append(&roam)?;
     }
     menu.append(&overlay)?;
+    menu.append(&startup)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&quit)?;
-    Ok((menu, TrayItems { shiny, roam, overlay }))
+    Ok((menu, TrayItems { startup, shiny, roam, overlay }))
 }
 
 /// Rebuild the tray menu (the "Move to monitor" list follows the monitors that are plugged in).
@@ -664,6 +693,10 @@ fn main() {
                         "overlay" => {
                             let on = checked(|i| &i.overlay);
                             commit(app, &state, |s| s.overlay = on);
+                        }
+                        "startup" => {
+                            set_autostart(checked(|i| &i.startup));
+                            refresh_menu(app);
                         }
                         "quit" => app.exit(0),
                         id if id.starts_with("mon:") => {
