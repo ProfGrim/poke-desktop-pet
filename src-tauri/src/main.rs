@@ -254,6 +254,9 @@ struct Settings {
     /// when no monitor is free of a fullscreen app, keep walking over it (never clickable) instead of hiding
     #[serde(default)]
     overlay: bool,
+    /// now and then trot over to the mouse cursor (off: he never follows it)
+    #[serde(default = "yes")]
+    chase: bool,
 }
 
 fn yes() -> bool {
@@ -262,7 +265,7 @@ fn yes() -> bool {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { species: None, form: String::new(), shiny: false, roam: true, overlay: false }
+        Settings { species: None, form: String::new(), shiny: false, roam: true, overlay: false, chase: true }
     }
 }
 
@@ -297,6 +300,7 @@ struct TrayItems {
     shiny: CheckMenuItem<Wry>,
     roam: CheckMenuItem<Wry>,
     overlay: CheckMenuItem<Wry>,
+    chase: CheckMenuItem<Wry>,
 }
 
 struct AppState {
@@ -336,6 +340,7 @@ fn commit(app: &AppHandle, state: &AppState, change: impl FnOnce(&mut Settings))
         let _ = items.shiny.set_checked(snapshot.shiny);
         let _ = items.roam.set_checked(snapshot.roam);
         let _ = items.overlay.set_checked(snapshot.overlay);
+        let _ = items.chase.set_checked(snapshot.chase);
     }
     let _ = app.emit("settings-changed", snapshot);
 }
@@ -573,6 +578,7 @@ fn build_menu(app: &AppHandle, s: &Settings, monitors: &[Mon]) -> tauri::Result<
     let picker = MenuItem::with_id(app, "picker", "Change Pokémon…", true, None::<&str>)?;
     let shiny = CheckMenuItem::with_id(app, "shiny", "Shiny", true, s.shiny, None::<&str>)?;
     let roam = CheckMenuItem::with_id(app, "roam", "Walk between monitors", true, s.roam, None::<&str>)?;
+    let chase = CheckMenuItem::with_id(app, "chase", "Follow the mouse now and then", true, s.chase, None::<&str>)?;
     let overlay = CheckMenuItem::with_id(
         app,
         "overlay",
@@ -602,11 +608,12 @@ fn build_menu(app: &AppHandle, s: &Settings, monitors: &[Mon]) -> tauri::Result<
         menu.append(&sub)?;
         menu.append(&roam)?;
     }
+    menu.append(&chase)?;
     menu.append(&overlay)?;
     menu.append(&startup)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&quit)?;
-    Ok((menu, TrayItems { startup, shiny, roam, overlay }))
+    Ok((menu, TrayItems { startup, shiny, roam, overlay, chase }))
 }
 
 /// Rebuild the tray menu (the "Move to monitor" list follows the monitors that are plugged in).
@@ -693,6 +700,10 @@ fn main() {
                         "overlay" => {
                             let on = checked(|i| &i.overlay);
                             commit(app, &state, |s| s.overlay = on);
+                        }
+                        "chase" => {
+                            let on = checked(|i| &i.chase);
+                            commit(app, &state, |s| s.chase = on);
                         }
                         "startup" => {
                             set_autostart(checked(|i| &i.startup));

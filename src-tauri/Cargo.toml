@@ -1,6 +1,6 @@
 [package]
 name = "fuecoco-pet"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 
 # Keep this crate out of the repo-root cargo workspace.

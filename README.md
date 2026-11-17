@@ -74,6 +74,8 @@ starting the app again, brings the picker back.
 - **Move to monitor** (more than one monitor only). Sends the pet to the monitor you pick.
 - **Walk between monitors** (more than one monitor only). On by default. The pet now and then walks off the
   edge of its screen and onto the next one. Turn it off and it stays where it is.
+- **Follow the mouse now and then**. On by default. Every few minutes, if your cursor is on his screen, he may
+  trot over to it. Turn it off and he never follows the mouse.
 - **Keep walking over fullscreen apps (not clickable)**. Off by default. See the next section.
 - **Start with Windows**. Off by default. Adds or removes the app's entry in your Windows startup apps, so the
   pet appears when you sign in. It starts straight into the tray and only opens the picker the very first time.
@@ -87,7 +89,11 @@ Shiny box.
 - It walks along the bottom of the screen, on top of the taskbar if you have one showing, or on the screen
   edge if the taskbar auto-hides. It naps now and then, eats, plays and stretches. A Charizard's tail flame is
   animated.
-- It chases your mouse, but only while the cursor is on the screen it's on, or on one right next to it.
+- Most of the time it just lives its life: wandering, standing about, looking around, shaking off, eating, resting,
+  the odd run, and napping. A Pokémon with no sleeping animation of its own still dozes: head drooped, slow
+  breathing, and little Zs floating up. Some also get grumpy if you poke them over and over, or drop them.
+- It only follows your mouse every few minutes at most, and only while the cursor is on the screen it's on, or on
+  one right next to it.
 - Click it to pet it, or to wake it up if it's asleep. Drag it to pick it up and let go to drop it. It falls
   and lands.
 - **It stays out of the way of fullscreen apps.** If a game or a video is fullscreen on the monitor it's on, it

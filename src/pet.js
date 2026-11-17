@@ -19,6 +19,7 @@ let species = Number(query.get('species')) || 909;
 let form = query.get('form') || '';   // '' is the base form; '_f03' etc. for alternates
 let shiny = query.has('shiny');
 let roamEnabled = true;      // wander between monitors on his own
+let chaseEnabled = true;     // now and then trot over to the mouse cursor
 let overlaySetting = false;  // no free monitor: keep walking over the fullscreen app (never clickable) instead of hiding
 
 let dpr = window.devicePixelRatio || 1;   // changes when the window is on a monitor with a different scale
@@ -101,6 +102,34 @@ resize();
 // ---------------------------------------------------------------- model
 const pivot = new THREE.Group();   // yaw + bounce + warp scale live here
 scene.add(pivot);
+
+// Little "Z"s that float up while he sleeps without a sleeping clip of his own (see 'dream' below).
+const zGroup = new THREE.Group();
+zGroup.visible = false;
+scene.add(zGroup);
+const zSprites = [0, 1, 2].map(() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.font = 'bold 46px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 7; g.strokeStyle = '#3a4a78'; g.fillStyle = '#ffffff';
+  g.strokeText('Z', 32, 35); g.fillText('Z', 32, 35);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  zGroup.add(sprite);
+  return sprite;
+});
+function updateZ(on) {
+  zGroup.visible = on;
+  if (!on) return;
+  zSprites.forEach((sp, i) => {
+    const k = (pet.clock * 0.45 + i / 3) % 1;                 // each Z drifts up and fades, one third of a cycle apart
+    sp.position.set(0.3 + 0.4 * k, 0.25 + 0.6 * k, 1);
+    sp.scale.setScalar(0.1 + 0.13 * k);
+    sp.material.opacity = Math.sin(k * Math.PI);
+  });
+}
 let mixer = null;
 const actions = {};
 let current = null;
@@ -112,7 +141,7 @@ let eyes = { canBlink: false, setEyes() {} };
 let blinkIn = 3, blinkFor = 0;
 function updateEyes(dt) {
   if (!eyes.canBlink) return;
-  if (current === actions.Nap) { eyes.setEyes(true); return; }
+  if (pet.sleeping || current === actions.Nap) { eyes.setEyes(true); return; }
   if (blinkFor > 0) { blinkFor -= dt; if (blinkFor <= 0) { eyes.setEyes(false); blinkIn = rand(2.5, 6); } return; }
   blinkIn -= dt;
   if (blinkIn <= 0) { eyes.setEyes(true); blinkFor = 0.14; }
@@ -165,7 +194,8 @@ function play(name, { once = false, fade = 0.25 } = {}) {
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
-const pet = { state: 'idle', timer: 0, dir: 1, target: 0, vy: 0, yaw: FACE.camera, yawGoal: FACE.camera, bounce: 0, sinceNap: 0, scale: 1, spin: 0, warp: null };
+const TURN_IN_PLACE = false;   // the models' own turn clips fight the smooth turn (they swing him the wrong way first), so they stay off
+const pet = { state: 'idle', timer: 0, dir: 1, target: 0, vy: 0, yaw: FACE.camera, yawGoal: FACE.camera, bounce: 0, sinceNap: 0, sleeping: false, wobble: 0, hop: 0, clock: 0, nextChase: 40, clicks: [], scale: 1, spin: 0, warp: null };
 
 // Global cursor position (physical px), polled from Rust. Null outside Tauri.
 let cursor = null;
@@ -206,22 +236,38 @@ function beginWarp(target, { fast = false } = {}) {
 
 function enter(state, arg) {
   pet.state = state;
+  if (state !== 'dream') { pet.sleeping = false; if (current) current.timeScale = 1; }
+  if (state !== 'happy') pet.hop = 0;
   if (state !== 'seq') seq = null;
   if (state !== 'warp') { pet.scale = 1; pet.spin = 0; pet.warp = null; }
   switch (state) {
     case 'idle':
       play('Idle');
-      pet.timer = rand(2, 6);
+      pet.timer = rand(4, 10);
       pet.yawGoal = FACE.camera;
       break;
-    case 'walk': {
+    case 'walk':
+    case 'run': {
       const ch = chain();
       const lo = ch.left, hi = ch.right - size.w;
-      pet.target = arg?.x ?? rand(lo, Math.max(lo + 1, hi));
-      pet.dir = pet.target > pos.x ? 1 : -1;
-      pet.yawGoal = pet.dir > 0 ? FACE.right : FACE.left;
-      play('Walk');
+      const target = arg?.x ?? rand(lo, Math.max(lo + 1, hi));
+      const dir = target > pos.x ? 1 : -1;
+      const turn = dir > 0 ? 'TurnRight' : 'TurnLeft';
+      if (!arg?.turned && TURN_IN_PLACE && dir !== pet.dir && actions[turn]) {   // reversing: turn on the spot first, then go
+        pet.pendingWalk = { x: target, turned: true, run: state === 'run' };
+        pet.dir = dir;
+        pet.yawGoal = dir > 0 ? FACE.right : FACE.left;
+        return runSeq([{ clip: turn }], { then: 'walkturned' });
+      }
+      pet.target = target;
+      pet.dir = dir;
+      pet.yawGoal = dir > 0 ? FACE.right : FACE.left;
+      play(state === 'run' && actions.Run ? 'Run' : 'Walk');
       break;
+    }
+    case 'walkturned': {
+      const w = pet.pendingWalk ?? {};
+      return enter(w.run ? 'run' : 'walk', w);
     }
     case 'roam': {
       // pick another monitor: walk there if it is chained to this one, otherwise warp
@@ -245,11 +291,12 @@ function enter(state, arg) {
     case 'chase':
       if (!cursorOnFloor()) return enter('idle');
       pet.timer = 12; // give up after a while
+      pet.nextChase = pet.clock + rand(90, 240);   // and don't do it again for a good while
       play(actions.Run ? 'Run' : 'Walk');
       break;
     case 'watch':
       play('Idle');
-      pet.timer = rand(3, 6);
+      pet.timer = rand(2, 4);
       break;
     case 'drag':
       play(actions.FallLoop ? 'FallLoop' : 'Idle'); // dangling from the cursor
@@ -259,7 +306,8 @@ function enter(state, arg) {
       play(actions.FallLoop ? 'FallLoop' : 'Idle');
       break;
     case 'nap':
-      runSeq([{ clip: 'SleepStart' }, { clip: 'Nap', dur: rand(12, 25) }, { clip: 'SleepEnd' }], { nap: true });
+      if (!actions.Nap && !actions.SleepStart) return enter('dream');   // no sleeping clip: sleep the procedural way
+      runSeq([{ clip: 'Drowse' }, { clip: 'SleepStart' }, { clip: 'Nap', dur: rand(20, 45) }, { clip: 'SleepEnd' }, { clip: 'Shake' }], { nap: true });
       pet.sinceNap = 0;
       break;
     case 'eat':
@@ -274,11 +322,46 @@ function enter(state, arg) {
       break;
     case 'land':
       pet.bounce = 0.5;
-      runSeq([{ clip: 'Land' }]);
+      runSeq([{ clip: 'Land' }], { then: actions.Hate && Math.random() < 0.3 ? 'grumpy' : 'idle' });   // being dropped is annoying
       break;
-    case 'fidget':
-      runSeq([{ clip: pick(['IdleA', 'IdleB', 'Look', 'Look', 'Shake']) }]);
+    case 'happy':
+      if (actions.Notice) { runSeq([{ clip: 'Notice' }], { then: 'idle' }); pet.bounce = 0.6; break; }
+      play('Idle');                    // no glad clip: hop for joy instead
+      pet.timer = 1.3;
+      pet.hop = 1;
       break;
+    case 'dream':                      // asleep, for models with no sleeping clip: eyes shut, slow breathing, floating Zs
+      play('Idle');
+      if (current) current.timeScale = 0.25;
+      pet.sleeping = true;
+      pet.timer = rand(20, 45);
+      pet.yawGoal = FACE.camera;
+      pet.sinceNap = 0;
+      break;
+    case 'stretch':
+      if (actions.Shake) { runSeq([{ clip: 'Shake' }]); break; }
+      return enter('shakeoff');
+    case 'shakeoff':                   // a quick shake-off that works for any model
+      play('Idle');
+      pet.wobble = 1;
+      pet.timer = 1.0;
+      break;
+    case 'lookaround':                 // glance left and right
+      play('Idle');
+      pet.timer = rand(3, 4.5);
+      break;
+    case 'grumpy':
+      runSeq([{ clip: 'Hate' }]);
+      break;
+    case 'lonely':
+      runSeq([{ clip: 'Lonely' }]);
+      break;
+    case 'fidget': {
+      const own = ['IdleA', 'IdleB', 'Look', 'Look', 'Shake'].filter((c) => actions[c]);
+      const own2 = own.length && Math.random() < 0.7;            // the model's own gestures first, a made-up one now and then
+      if (own2) { runSeq([{ clip: pick(own) }]); break; }
+      return enter(pick(['lookaround', 'shakeoff']));
+    }
     case 'flame':
       runSeq([{ clip: 'Flame' }]);
       break;
@@ -286,10 +369,10 @@ function enter(state, arg) {
       runSeq([{ clip: 'Roar' }]);
       break;
     case 'notice':
-      runSeq([{ clip: 'Notice' }], { then: 'watch' });
+      runSeq([{ clip: 'Notice' }], { then: Math.random() < 0.25 ? 'watch' : 'idle' });
       break;
     case 'pounce':
-      runSeq([{ clip: 'Attack' }], { then: 'watch' });
+      runSeq([{ clip: 'Attack' }], { then: Math.random() < 0.25 ? 'watch' : 'idle' });
       break;
   }
 }
@@ -298,19 +381,29 @@ function onFinished(action) {
   if (pet.state === 'seq' && seq && !seq.steps[seq.i].dur && action === actions[seq.steps[seq.i].clip]) nextStep();
 }
 
+/** Choose what to do next. Mostly ordinary life (walking, idling, eating, napping); the mouse is a rare treat. */
 function pickNext() {
-  const r = Math.random();
-  const sleepy = pet.sinceNap > 40;
-  if (sleepy && r < 0.3) return enter('nap');
-  if (r < 0.22 && cursorOnFloor()) return enter('chase');
-  if (r < 0.34 && roamEnabled && !overlayMode && monitors.filter(isFree).length > 1) return enter('roam');
-  if (r < 0.46) return enter('walk');
-  if (r < 0.56) return enter('eat');
-  if (r < 0.64) return enter('play');
-  if (r < 0.72) return enter('fidget');
-  if (r < 0.78) return enter('rest');
-  if (r < 0.82) return enter('flame');
-  if (r < 0.84) return enter('roar');
+  const sleepy = pet.sinceNap > 150;                       // awake a couple of minutes: napping gets likely
+  const chaseOk = chaseEnabled && cursorOnFloor() && pet.clock >= pet.nextChase;
+  const roamOk = roamEnabled && !overlayMode && monitors.filter(isFree).length > 1;
+  const options = [
+    [sleepy ? 0.30 : 0.06, 'nap'],
+    [chaseOk ? 0.06 : 0, 'chase'],
+    [roamOk ? 0.07 : 0, 'roam'],
+    [0.20, 'walk'],
+    [actions.Run ? 0.05 : 0, 'run'],
+    [0.14, 'idle'],
+    [0.09, 'eat'],
+    [0.06, 'play'],
+    [0.12, 'fidget'],
+    [0.08, 'rest'],
+    [actions.Flame ? 0.03 : 0, 'flame'],
+    [actions.Roar ? 0.02 : 0, 'roar'],
+    [actions.Lonely ? 0.02 : 0, 'lonely'],
+    [actions.Hate ? 0.02 : 0, 'grumpy'],
+  ];
+  let roll = Math.random() * options.reduce((t, o) => t + o[0], 0);
+  for (const [w, name] of options) { roll -= w; if (w > 0 && roll <= 0) return enter(name); }
   return enter('idle');
 }
 
@@ -319,6 +412,7 @@ const easeOut = (k) => 1 - (1 - k) * (1 - k);
 
 function step(dt) {
   pet.sinceNap += dt;
+  pet.clock += dt;
   const x0 = pos.x;
   switch (pet.state) {
     case 'idle':
@@ -328,11 +422,12 @@ function step(dt) {
     case 'seq':
       if (seq && seq.t > 0) { seq.t -= dt; if (seq.t <= 0) nextStep(); }
       break;
-    case 'walk': {
+    case 'walk':
+    case 'run': {
       // A monitor can fill up with a game while he is on his way to it, which shrinks where he may stand.
       // Re-aim at the nearest spot he can reach, so he stops at the edge instead of pushing against it.
       pet.target = reachableX(chain(), pet.target, size.w);
-      pos.x += pet.dir * 70 * dpr * dt;
+      pos.x += pet.dir * (pet.state === 'run' ? 150 : 70) * dpr * dt;
       const arrived = pet.dir > 0 ? pos.x >= pet.target : pos.x <= pet.target;
       if (arrived) enter('idle');
       break;
@@ -347,6 +442,21 @@ function step(dt) {
       pos.x += pet.dir * 130 * dpr * dt; // a trot, faster than a wander
       break;
     }
+    case 'dream':
+      pet.timer -= dt;
+      if (pet.timer <= 0) enter('stretch');
+      break;
+    case 'happy':
+    case 'shakeoff':
+      pet.timer -= dt;
+      if (pet.state === 'happy') pet.hop = Math.max(0, pet.timer / 1.3);   // little hops that die down
+      if (pet.timer <= 0) enter('idle');
+      break;
+    case 'lookaround':
+      pet.yawGoal = FACE.camera + Math.sin(pet.clock * 1.7) * 0.95;
+      pet.timer -= dt;
+      if (pet.timer <= 0) enter('idle');
+      break;
     case 'watch':
       // stand there looking at the cursor, turning with it
       if (cursor) pet.yawGoal = FACE.camera + Math.max(-1, Math.min(1, (cursor.x - (pos.x + size.w / 2)) / (300 * dpr))) * 0.7;
@@ -390,7 +500,7 @@ function step(dt) {
   }
 
   // Last line of defence: walking or trotting but going nowhere (pinned against an edge) for a second means stop.
-  if (pet.state === 'walk' || pet.state === 'chase') {
+  if (pet.state === 'walk' || pet.state === 'run' || pet.state === 'chase') {
     pet.stuck = Math.abs(pos.x - x0) < 0.05 * dpr ? (pet.stuck ?? 0) + dt : 0;
     if (pet.stuck > 1) { pet.stuck = 0; enter('idle'); }
   } else pet.stuck = 0;
@@ -399,9 +509,16 @@ function step(dt) {
   const d = pet.yawGoal - pet.yaw;
   pet.yaw += d * Math.min(1, dt * 9);
   pivot.rotation.y = pet.yaw + pet.spin;
-  pivot.scale.setScalar(pet.scale);
+  pivot.rotation.z = Math.sin(pet.clock * 26) * 0.2 * pet.wobble;
+  pet.wobble = Math.max(0, pet.wobble - dt * 0.9);
+  const breath = pet.sleeping ? 1 + 0.02 * Math.sin(pet.clock * 1.7) : 1;
+  pivot.scale.set(pet.scale, pet.scale * breath, pet.scale);
+  // dozing: head drooped forward and a little sideways, nodding gently
+  pivot.rotation.x = pet.sleeping ? 0.16 + 0.04 * Math.sin(pet.clock * 1.1) : 0;
+  pivot.rotation.z += pet.sleeping ? 0.07 : 0;
+  updateZ(pet.sleeping);
   pet.bounce = Math.max(0, pet.bounce - dt * 2.2);
-  pivot.position.y = Math.abs(Math.sin(pet.bounce * Math.PI * 2)) * 0.18 * pet.bounce + FLOOR * (1 - pet.scale);
+  pivot.position.y = Math.abs(Math.sin(pet.bounce * Math.PI * 2)) * 0.18 * pet.bounce + Math.abs(Math.sin(pet.clock * 11)) * 0.2 * (pet.hop || 0) + FLOOR * (1 - pet.scale);
 }
 
 // ---------------------------------------------------------------- displays and fullscreen apps
@@ -475,7 +592,12 @@ function release() {
   press = null;
   if (wasDrag) return enter(pos.y < groundY() - 2 ? 'fall' : 'land');
   if (seq?.nap) return runSeq([{ clip: 'SleepEnd' }]);   // a click wakes him
-  enter('play');                                          // otherwise it pets him
+  if (pet.state === 'dream') return enter('stretch');
+  // otherwise it pets him: usually happy, but poke him over and over and he gets grumpy
+  const now = pet.clock;
+  pet.clicks = pet.clicks.filter((t) => now - t < 5).concat(now);
+  if (pet.clicks.length >= 4 && actions.Hate) { pet.clicks = []; return enter('grumpy'); }
+  enter(actions.Notice && Math.random() < 0.5 ? 'happy' : 'play');
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
@@ -511,6 +633,7 @@ function updateClickThrough() {
 async function applySettings(s) {
   if (!s) return;
   roamEnabled = s.roam !== false;
+  chaseEnabled = s.chase !== false;
   overlaySetting = !!s.overlay;
   if (s.species == null) return;
   const changed = !(s.species === species && (s.form || '') === form && !!s.shiny === shiny && Object.keys(actions).length);
@@ -614,8 +737,8 @@ function lowestRow() {
 
 // handy for poking at it from the console / a test harness
 window.__pet = {
-  enter, pet, pos, play, actions, applySettings, lowestRow, applyDisplays, beginWarp, step,
-  get species() { return species; }, get shiny() { return shiny; }, get cursor() { return cursor; },
+  enter, pet, pos, play, actions, applySettings, lowestRow, applyDisplays, beginWarp, step, tick: (dt) => { step(dt); mixer?.update(dt); },
+  get species() { return species; }, get shiny() { return shiny; }, get cursor() { return cursor; }, set cursor(v) { cursor = v; },
   get ignoring() { return ignoring; }, get seq() { return seq; }, get hidden() { return hidden; },
   get overlayMode() { return overlayMode; }, get size() { return size; },
   get monitors() { return monitors; }, get occupied() { return [...occupied]; },
