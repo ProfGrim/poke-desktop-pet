@@ -30,7 +30,7 @@ If something looks off, open an issue with the Pokémon, form and whether it's s
 
 ## Install
 
-1. Grab `PokemonDesktopPet_1.0.0_x64-setup.exe` from the [releases page](../../releases/latest) and run it.
+1. Grab `PokemonDesktopPet_1.0.1_x64-setup.exe` from the [releases page](../../releases/latest) and run it.
    Windows will probably warn you about an unknown publisher (I haven't paid for a code-signing certificate).
    Click "More info", then "Run anyway".
 2. Download some model packs from the same page. They're big (roughly 200 MB to 1.5 GB), so you only need the
